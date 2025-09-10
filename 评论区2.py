@@ -7,30 +7,36 @@ import time
 import json
 import os
 import pyperclip
+import shutil
 
 # 配置部分
-MESSAGE = "‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍啊啊啊啊"  # 要发送的私信内容
-COOKIES_PATH = "bilibili_cookies.json"  # 登录后保存的cookie路径
-SENT_USERS_PATH = "sent_users.json"  # 已发送用户记录文件
+MESSAGE = "‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍这里私信内容"
+COOKIES_PATH = "bilibili_cookies.json"
+SENT_USERS_PATH = "sent_users.json"
 
 # 初始化浏览器
 def init_browser():
     options = webdriver.ChromeOptions()
-    options.add_argument("--start-maximized")  # 最大化窗口
+    options.add_argument("--start-maximized")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    profile_dir = os.path.join(os.getcwd(), "chrome_profile")
+    options.add_argument(f"--user-data-dir={profile_dir}")
     driver = webdriver.Chrome(options=options)
     return driver
 
-# 登录B站（手动登录一次保存cookies）
+# 登录B站并保存cookie
 def login_bilibili(driver):
     driver.get("https://www.bilibili.com")
-    print("请手动登录B站...")
-    time.sleep(20)  # 等待用户手动登录
+    print("请手动登录B站（等待20秒）...")
+    time.sleep(20)
     print("登录完成，保存Cookies")
-    cookies = driver.get_cookies()
     with open(COOKIES_PATH, "w", encoding="utf-8") as f:
-        json.dump(cookies, f)
+        json.dump(driver.get_cookies(), f)
 
-# 加载Cookies
+# 加载cookie并验证
 def load_cookies(driver):
     if not os.path.exists(COOKIES_PATH):
         raise Exception("Cookies文件不存在，请先手动登录保存Cookies")
@@ -40,7 +46,23 @@ def load_cookies(driver):
         for cookie in cookies:
             driver.add_cookie(cookie)
     driver.refresh()
-    time.sleep(20)
+    time.sleep(5)
+    if "passport.bilibili.com" in driver.current_url or "login" in driver.current_url:
+        print("Cookie失效或加载失败，需重新登录")
+        login_bilibili(driver)
+    else:
+        print("Cookie有效，已自动登录")
+
+# 清理临时文件
+def cleanup(driver):
+    driver.quit()
+    profile_dir = os.path.join(os.getcwd(), "chrome_profile")
+    if os.path.exists(profile_dir):
+        try:
+            shutil.rmtree(profile_dir)
+            print("已删除临时配置文件目录")
+        except Exception as e:
+            print(f"删除临时文件失败：{e}")
 
 # 加载已发送用户记录
 def load_sent_usernames():
@@ -53,6 +75,7 @@ def load_sent_usernames():
 def save_sent_usernames(sent_usernames):
     with open(SENT_USERS_PATH, "w", encoding="utf-8") as f:
         json.dump(list(sent_usernames), f)
+
 
 # 递归进入 Shadow DOM 定位元素
 def find_shadow_element(driver, root_element, css_selector):
@@ -329,16 +352,16 @@ def send_message_to_user(driver, user):
         private_message_window = [window for window in all_windows if window != current_window and window != new_window][0]
         driver.switch_to.window(private_message_window)  # 切换到私信窗口
         time.sleep(1)  # 等待私信页面加载完成
+
         # 定位到文本框
         print("定位到文本框...")
         try:
-            editor = driver.find_element(By.CLASS_NAME, "brt-editor")  # 根据 ID 定位输入框
+            editor = driver.find_element(By.ID, "editor")  # 根据 ID 定位输入框
         except Exception as e:
             print(f"定位文本框失败，尝试等待页面完全加载，错误信息：{e}")
             time.sleep(3)  # 增加等待时间，确保页面完全加载
-            editor = driver.find_element(By.CLASS_NAME, "brt-editor") 
+            editor = driver.find_element(By.ID, "editor")  # 再次尝试定位
 
-    
         # 使用粘贴的方式插入内容
         print(f"准备以粘贴方式插入内容，内容为：\n{MESSAGE}")
         try:
@@ -359,7 +382,7 @@ def send_message_to_user(driver, user):
         # 点击发送按钮
         print("尝试点击发送按钮...")
         try:
-            send_button = driver.find_element(By.CLASS_NAME, "_MessageSendBox__SendBtn_125bg_58")
+            send_button = driver.find_element(By.CSS_SELECTOR, "[data-v-70b6d4bb]")
             send_button.click()
             time.sleep(1)
         except Exception as e:
@@ -394,98 +417,44 @@ def main():
     driver = init_browser()
     sent_usernames = load_sent_usernames()
 
-    # 视频任务队列
     VIDEO_URLS = [
-               "https://www.bilibili.com/video/BV1dzVJzeEi4/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-       "https://www.bilibili.com/video/BV1iuVxzJECp/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-       "https://www.bilibili.com/video/BV1UMVbz2EUK/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-       "https://www.bilibili.com/video/BV1bZVgzhE7Z/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-       "https://www.bilibili.com/video/BV1xPV1zsEZm/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV16bQtYEECx?spm_id_from=333.788.recommend_more_video.1&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1HwZ8YTEcu?spm_id_from=333.788.recommend_more_video.-1&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1g7dwYvENg?spm_id_from=333.788.recommend_more_video.0&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1n5QHYeERN?spm_id_from=333.788.recommend_more_video.-1&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1RBdTYxEpX?spm_id_from=333.788.recommend_more_video.-1&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1c1Lkz2EX9/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1JaG1zGEvd/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1bFVwzME49/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1dMVAzDEgD/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1FvoMY3EEd?spm_id_from=333.788.recommend_more_video.8&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1bqC1YtEXA?spm_id_from=333.788.recommend_more_video.-1&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV19x4y1E7gZ?spm_id_from=333.788.recommend_more_video.0&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1v1L3zLEYJ/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1VsVuzNEti/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV18yZ9YREQc?spm_id_from=333.788.recommend_more_video.0&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1TcV3zbEbq/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1c1Lkz2EX9/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV18yZ9YREQc?spm_id_from=333.788.recommend_more_video.-1&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1UuGeztERq/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1nKKKeREMb?spm_id_from=333.788.recommend_more_video.0&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1bqC1YtEXA?spm_id_from=333.788.recommend_more_video.0&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1JcLBzcEk9/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1v4dqYLEfz/?spm_id_from=333.1387.homepage.video_card.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1RijwzWEk8/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1aBGXznEgY/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1VeGrzsEsq?spm_id_from=333.788.recommend_more_video.0&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1YLRRYXEnH/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1RBdTYxEpX/?spm_id_from=333.1387.homepage.video_card.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1WMZ4YvEia/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV15oVjzxEgA/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1VyG1zPEY9/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
-        "https://www.bilibili.com/video/BV1nKKKeREMb?spm_id_from=333.788.recommend_more_video.-1&vd_source=e66614dc8905ed77322d9de68f16d030",
-
-    ]
+        "https://www.bilibili.com/video/BV13qkuYZEAQ/?vd_source=e66614dc8905ed77322d9de68f16d030",
+   "https://www.bilibili.com/video/BV1N8Q1YrEnG/?spm_id_from=333.337.search-card.all.click&vd_source=e66614dc8905ed77322d9de68f16d030",
+        "https://www.bilibili.com/video/BV1hzQGYxE3R?spm_id_from=333.788.recommend_more_video.-1&vd_source=e66614dc8905ed77322d9de68f16d030",
+  ]  # 填入你的视频URL列表
 
     try:
-        # 加载Cookies或登录
         if not os.path.exists(COOKIES_PATH):
-            print("未检测到 Cookies 文件，将进入手动扫码登录流程...")
-            driver.get("https://www.bilibili.com")
-            print("请扫码登录 B站（10秒后自动继续）...")
-            time.sleep(20)
-            print("登录完成，保存 Cookies...")
-            cookies = driver.get_cookies()
-            with open(COOKIES_PATH, "w", encoding="utf-8") as f:
-                json.dump(cookies, f)
+            print("未检测到Cookies文件，将进入手动登录流程...")
+            login_bilibili(driver)
         else:
             load_cookies(driver)
 
-        # 无限循环处理视频任务队列
         while True:
             for video_url in VIDEO_URLS:
                 print(f"开始处理视频：{video_url}")
-
                 while True:
-                    # 获取最新评论的用户列表
                     users = get_recent_comment_users(driver, video_url)
-
-                    # 过滤出未发送私信的新用户
                     new_users = [user for user in users if user['name'] not in sent_usernames]
-
                     if not new_users:
                         print(f"视频 {video_url} 没有新的用户需要私信，切换到下一个视频...")
-                        break  # 当前视频任务完成，切换到下一个视频
-
-                    # 给每个新用户发送私信
+                        break
                     for user in new_users:
                         if send_message_to_user(driver, user):
-                            sent_usernames.add(user['name'])  # 添加到已发送用户名列表
-                            save_sent_usernames(sent_usernames)  # 保存记录
+                            sent_usernames.add(user['name'])
+                            save_sent_usernames(sent_usernames)
                         else:
                             print(f"发送私信失败，跳过用户 {user['name']}")
                             sent_usernames.add(user['name'])
                             save_sent_usernames(sent_usernames)
-
                 print(f"视频 {video_url} 的所有任务已完成，切换到下一个视频...")
-
-            # 当所有视频任务都完成后，等待一段时间后再从头开始
-            print("所有视频任务完成，等待 10 秒后重新开始...")
+            print("所有视频任务完成，等待10秒后重新开始...")
             time.sleep(10)
 
     except Exception as e:
         print(f"运行出错：{e}")
     finally:
-        driver.quit()
+        cleanup(driver)
+
 if __name__ == "__main__":
     main()
-
