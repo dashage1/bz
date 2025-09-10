@@ -9,7 +9,7 @@ import os
 import pyperclip
 
 # 配置部分
-MESSAGE = "‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍GPT4官网账号，140两个月，可以用最新的4o画图。opeani限时优惠，截止五月底。没有梯子的话可以推荐，可以走淘宝。gpt镜像站40一个月（纯逆向官网plus账号），需要联系客服了解：wx2481022"  # 要发送的私信内容
+MESSAGE = "‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍啊啊啊啊"  # 要发送的私信内容
 COOKIES_PATH = "bilibili_cookies.json"  # 登录后保存的cookie路径
 SENT_USERS_PATH = "sent_users.json"  # 已发送用户记录文件
 
@@ -488,3 +488,4 @@ def main():
         driver.quit()
 if __name__ == "__main__":
     main()
+
